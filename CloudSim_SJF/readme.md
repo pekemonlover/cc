@@ -1,33 +1,63 @@
 package org.cloudbus.cloudsim.examples;
 
 import java.text.DecimalFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedList;
+import java.util.List;
 
-import org.cloudbus.cloudsim.*;
+import org.cloudbus.cloudsim.Cloudlet;
+import org.cloudbus.cloudsim.CloudletSchedulerTimeShared;
+import org.cloudbus.cloudsim.Datacenter;
+import org.cloudbus.cloudsim.DatacenterBroker;
+import org.cloudbus.cloudsim.DatacenterCharacteristics;
+import org.cloudbus.cloudsim.Host;
+import org.cloudbus.cloudsim.Log;
+import org.cloudbus.cloudsim.Pe;
+import org.cloudbus.cloudsim.Storage;
+import org.cloudbus.cloudsim.UtilizationModel;
+import org.cloudbus.cloudsim.UtilizationModelFull;
+import org.cloudbus.cloudsim.Vm;
+import org.cloudbus.cloudsim.VmAllocationPolicySimple;
+import org.cloudbus.cloudsim.VmSchedulerTimeShared;
 import org.cloudbus.cloudsim.core.CloudSim;
-import org.cloudbus.cloudsim.provisioners.*;
+import org.cloudbus.cloudsim.provisioners.BwProvisionerSimple;
+import org.cloudbus.cloudsim.provisioners.PeProvisionerSimple;
+import org.cloudbus.cloudsim.provisioners.RamProvisionerSimple;
 
 public class CloudSimSJF {
 
     private static List<Cloudlet> cloudletList;
+
     private static List<Vm> vmlist;
 
     public static void main(String[] args) {
 
-        Log.printLine("Starting SJF Simulation...");
+        Log.printLine("Starting CloudSim SJF Simulation...");
 
         try {
 
             int num_user = 1;
+
             Calendar calendar = Calendar.getInstance();
+
             boolean trace_flag = false;
 
             CloudSim.init(num_user, calendar, trace_flag);
 
-            Datacenter datacenter0 = createDatacenter("Datacenter_0");
+            Datacenter datacenter0 =
+                    createDatacenter("Datacenter_0");
 
-            DatacenterBroker broker = createBroker();
+            DatacenterBroker broker =
+                    createBroker();
+
             int brokerId = broker.getId();
+
+            /*
+             * Create VM
+             */
 
             vmlist = new ArrayList<Vm>();
 
@@ -46,34 +76,78 @@ public class CloudSimSJF {
 
             broker.submitVmList(vmlist);
 
-            cloudletList = new ArrayList<Cloudlet>();
+            /*
+             * Create Cloudlets
+             */
+
+            cloudletList =
+                    new ArrayList<Cloudlet>();
 
             UtilizationModel utilizationModel =
                     new UtilizationModelFull();
 
-            long[] lengths = {40000, 20000, 30000, 10000};
+            long[] cloudletLength = {
+                    40000,
+                    10000,
+                    30000,
+                    20000
+            };
 
-            Arrays.sort(lengths);
+            for (int i = 0;
+                 i < cloudletLength.length;
+                 i++) {
 
-            for (int i = 0; i < lengths.length; i++) {
-
-                Cloudlet cloudlet = new Cloudlet(
-                        i,
-                        lengths[i],
-                        1,
-                        300,
-                        300,
-                        utilizationModel,
-                        utilizationModel,
-                        utilizationModel);
+                Cloudlet cloudlet =
+                        new Cloudlet(
+                                i,
+                                cloudletLength[i],
+                                1,
+                                300,
+                                300,
+                                utilizationModel,
+                                utilizationModel,
+                                utilizationModel);
 
                 cloudlet.setUserId(brokerId);
-                cloudlet.setVmId(0);
 
                 cloudletList.add(cloudlet);
             }
 
+            /*
+             * Sort Cloudlets using SJF
+             */
+
+            Collections.sort(
+                    cloudletList,
+                    new Comparator<Cloudlet>() {
+
+                @Override
+                public int compare(
+                        Cloudlet c1,
+                        Cloudlet c2) {
+
+                    return Long.compare(
+                            c1.getCloudletLength(),
+                            c2.getCloudletLength());
+                }
+            });
+
             broker.submitCloudletList(cloudletList);
+
+            /*
+             * Bind Cloudlets to VM
+             */
+
+            for (Cloudlet cloudlet : cloudletList) {
+
+                broker.bindCloudletToVm(
+                        cloudlet.getCloudletId(),
+                        vm.getId());
+            }
+
+            /*
+             * Start Simulation
+             */
 
             CloudSim.startSimulation();
 
@@ -84,29 +158,42 @@ public class CloudSimSJF {
 
             printCloudletList(newList);
 
-            Log.printLine("SJF Simulation Finished!");
+            Log.printLine(
+                    "CloudSim SJF Finished!");
 
-        } catch (Exception e) {
+        }
+
+        catch (Exception e) {
+
             e.printStackTrace();
+
+            Log.printLine(
+                    "Simulation terminated due to error");
         }
     }
 
-    private static Datacenter createDatacenter(String name) {
+    private static Datacenter createDatacenter(
+            String name) {
 
-        List<Host> hostList = new ArrayList<Host>();
+        List<Host> hostList =
+                new ArrayList<Host>();
 
-        List<Pe> peList = new ArrayList<Pe>();
+        List<Pe> peList =
+                new ArrayList<Pe>();
 
-        peList.add(new Pe(0,
-                new PeProvisionerSimple(1000)));
+        peList.add(
+                new Pe(
+                        0,
+                        new PeProvisionerSimple(1000)));
 
-        hostList.add(new Host(
-                0,
-                new RamProvisionerSimple(2048),
-                new BwProvisionerSimple(10000),
-                1000000,
-                peList,
-                new VmSchedulerTimeShared(peList)));
+        hostList.add(
+                new Host(
+                        0,
+                        new RamProvisionerSimple(2048),
+                        new BwProvisionerSimple(10000),
+                        1000000,
+                        peList,
+                        new VmSchedulerTimeShared(peList)));
 
         DatacenterCharacteristics characteristics =
                 new DatacenterCharacteristics(
@@ -123,14 +210,19 @@ public class CloudSimSJF {
         Datacenter datacenter = null;
 
         try {
+
             datacenter = new Datacenter(
                     name,
                     characteristics,
-                    new VmAllocationPolicySimple(hostList),
+                    new VmAllocationPolicySimple(
+                            hostList),
                     new LinkedList<Storage>(),
                     0);
 
-        } catch (Exception e) {
+        }
+
+        catch (Exception e) {
+
             e.printStackTrace();
         }
 
@@ -142,30 +234,78 @@ public class CloudSimSJF {
         DatacenterBroker broker = null;
 
         try {
-            broker = new DatacenterBroker("Broker");
-        } catch (Exception e) {
+
+            broker =
+                    new DatacenterBroker("Broker");
+
+        }
+
+        catch (Exception e) {
+
             e.printStackTrace();
+
+            return null;
         }
 
         return broker;
     }
 
-    private static void printCloudletList(List<Cloudlet> list) {
+    private static void printCloudletList(
+            List<Cloudlet> list) {
 
-        DecimalFormat dft = new DecimalFormat("###.##");
+        String indent = "    ";
 
-        Log.printLine("\n========== OUTPUT ==========");
+        Log.printLine();
 
-        Log.printLine("Cloudlet ID\tSTATUS\tVM ID\tTime");
+        Log.printLine(
+                "========== OUTPUT ==========");
+
+        Log.printLine(
+                "Cloudlet ID"
+                + indent
+                + "STATUS"
+                + indent
+                + "VM ID"
+                + indent
+                + "Time"
+                + indent
+                + "Start Time"
+                + indent
+                + "Finish Time");
+
+        DecimalFormat dft =
+                new DecimalFormat("###.##");
 
         for (Cloudlet cloudlet : list) {
 
-            Log.printLine(
-                    cloudlet.getCloudletId() +
-                    "\tSUCCESS\t" +
-                    cloudlet.getVmId() +
-                    "\t" +
-                    dft.format(cloudlet.getActualCPUTime()));
+            Log.print(
+                    indent
+                    + cloudlet.getCloudletId()
+                    + indent
+                    + indent);
+
+            if (cloudlet.getCloudletStatus()
+                    == Cloudlet.SUCCESS) {
+
+                Log.print("SUCCESS");
+
+                Log.printLine(
+                        indent
+                        + indent
+                        + cloudlet.getVmId()
+                        + indent
+                        + indent
+                        + dft.format(
+                                cloudlet.getActualCPUTime())
+                        + indent
+                        + indent
+                        + dft.format(
+                                cloudlet.getExecStartTime())
+                        + indent
+                        + indent
+                        + dft.format(
+                                cloudlet.getFinishTime()));
+            }
         }
     }
 }
